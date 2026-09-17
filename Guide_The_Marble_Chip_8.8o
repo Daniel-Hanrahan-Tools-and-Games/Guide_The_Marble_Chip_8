@@ -1,0 +1,267 @@
+# title: Guide The Marble Compacted
+# author: Daniel Hanrahan (Octo Port)
+# license: GNU GPL-3.0
+# version: 2
+# script: octo
+
+# =====================
+# ALIASES
+# =====================
+:alias px v0       # Player X position
+:alias py v1       # Player Y position
+:alias vx v2       # Player X velocity (using 8-bit wrap-around)
+:alias vy v3       # Player Y velocity / gravity counter
+:alias room v4     # Current room number (0-8)
+:alias ticker v5   # General timer / loop counter (renamed from delay)
+:alias bx v6       # Bumper X temp storage
+:alias by v7       # Bumper Y temp storage
+:alias input v8    # Key input storage
+:alias is_hit vF   # Hardware collision flag (VF)
+
+# =====================
+# MAIN ENTRY
+# =====================
+: main
+    room := 0
+    clear
+    
+: title_wait
+    input := key          
+    if input != 5 then jump title_wait 
+
+: restart_game
+    room := random 8
+    jump load_room
+
+# =====================
+# ROOM TRANSITION LOGIC
+# =====================
+: next_room
+    room := random 9   # Picks a random room from 0 to 8
+    jump load_room
+
+# =====================
+# ROOM LOAD & BUILDER
+# =====================
+: load_room
+    clear
+    
+    # Draw Background Objects FIRST
+    if room == 0 then jump spawn_player
+    if room == 1 then jump spawn_player
+    if room == 2 then jump spawn_player
+    if room == 3 then jump draw_r4
+    if room == 4 then jump draw_r5
+    if room == 5 then jump spawn_player
+    if room == 6 then jump draw_r7
+    if room == 7 then jump draw_r8
+    if room == 8 then jump draw_r9
+: draw_r4
+    i := spr_solid
+    bx := 20 by := 24 sprite bx by 8
+    bx := 38 by := 24 sprite bx by 8
+
+    i := spr_bumper
+    bx := 16 by := 18 sprite bx by 8
+    bx := 28 by := 18 sprite bx by 8
+    bx := 40 by := 18 sprite bx by 8
+    jump spawn_player
+
+: draw_r5
+    i := spr_bumper
+    bx := 10 by := 8 sprite bx by 8
+    bx := 25 by := 22 sprite bx by 8
+    jump spawn_player
+
+: draw_r7
+    i := spr_solid
+    bx := 16 by := 20 sprite bx by 8
+    bx := 20 by := 24 sprite bx by 8
+    bx := 24 by := 24 sprite bx by 8
+    bx := 32 by := 8 sprite bx by 8
+    bx := 28 by := 14 sprite bx by 8
+    bx := 32 by := 24 sprite bx by 8
+    jump spawn_player
+
+: draw_r8
+    i := spr_bumper
+    bx := 10 by := 8 sprite bx by 8
+    bx := 30 by := 16 sprite bx by 8
+    bx := 25 by := 24 sprite bx by 8
+    jump spawn_player
+
+: draw_r9
+    i := spr_bumper
+    bx := 17 by := 10 sprite bx by 8
+    bx := 17 by := 22 sprite bx by 8
+    bx := 38 by := 24 sprite bx by 8
+    jump spawn_player
+
+: spawn_player
+    # 1. Set Coordinates FIRST
+    if room == 0 then jump spawn_0
+    if room == 1 then jump spawn_1
+    if room == 2 then jump spawn_2
+    if room == 3 then jump spawn_3
+    if room == 4 then jump spawn_4
+    if room == 5 then jump spawn_5
+    if room == 6 then jump spawn_6
+    if room == 7 then jump spawn_7
+    if room == 8 then jump spawn_8
+
+: spawn_0 px := 28 py := 2 jump end_spawn
+: spawn_1 px := 28 py := 2 jump end_spawn
+: spawn_2 px := 28 py := 2 jump end_spawn
+: spawn_3 px := 28 py := 2 jump end_spawn
+: spawn_4 px := 28 py := 2 jump end_spawn
+: spawn_5 px := 28 py := 2 jump end_spawn
+: spawn_6 px := 24 py := 2 jump end_spawn
+: spawn_7 px := 20 py := 2 jump end_spawn
+: spawn_8 px := 28 py := 2 jump end_spawn
+
+: end_spawn
+    vx := 0
+    vy := 0
+    
+    # Jump into the middle of the loop to skip the initial erase!
+    jump resume_loop
+
+# =====================
+# MAIN GAME LOOP
+# =====================
+: game_loop
+    # 1. ERASE marble from old position (Only runs on active frames)
+    i := spr_player
+    sprite px py 8
+
+: resume_loop
+    # 2. APPLY INPUT & GRAVITY
+    vx := 0
+    input := 4
+    if input key then vx := 253  # Left (-3)
+    input := 6
+    if input key then vx := 3    # Right (+1)
+    px += vx
+
+    vy += 1
+    if vy != 3 then jump skip_gravity
+    py += 1                      # Gravity pulls DOWN (+1)
+    vy := 0       
+: skip_gravity
+
+    # 3. SCREEN BOUNDS
+    if px > 56 then px := 56
+    if px > 200 then px := 0      
+
+    # 4. DRAW marble at new position
+    i := spr_player
+    sprite px py 8
+
+    # 5. CHECK COLLISION WITH WALLS
+    if is_hit != 0 then jump handle_collision
+        
+    if py > 24 then jump next_room
+    
+    ticker := 1
+    ticker := ticker 
+    
+    jump game_loop
+
+# =====================
+# GAME OVER & COLLISION
+# =====================
+: game_over
+    clear
+    
+    # Draw large 'X' at center of screen (28, 12)
+    i := spr_x
+    bx := 28
+    by := 12
+    sprite bx by 8
+    
+    # Hold the Game Over screen for a moment
+    ticker := 30
+    ticker := ticker
+    
+    jump main
+
+: check_r4_wall
+    # Check if hit left solid post (X between 14 and 24)
+    if px < 14 then jump check_r4_post2
+    if px > 24 then jump check_r4_post2
+    jump game_over
+
+: check_r4_post2
+    # Check if hit right solid post (X between 34 and 44)
+    if px < 34 then jump apply_bumper_bounce
+    if px > 44 then jump apply_bumper_bounce
+    jump game_over
+
+: handle_collision
+    # 1. Erase marble from collision point
+    i := spr_player
+    sprite px py 8
+
+    # 2. Check room collision types
+    if room == 6 then jump game_over     # Room index 6 (draw_r7) is solid walls only
+    if room == 3 then jump check_r4_wall # Room index 3 (draw_r4) has mixed walls & bumpers
+
+    # 3. Default to bumper bounce (Rooms with bumpers only)
+    jump apply_bumper_bounce
+
+: apply_bumper_bounce
+    # Erase marble from collision point
+    i := spr_player
+    sprite px py 8
+    
+    # Bumper Jolt: Kick upward (-3) and bounce horizontal momentum
+    py += 253 
+    if vx == 1 then vx := 254   # If moving right, bounce left hard (-2)
+    if vx == 255 then vx := 2   # If moving left, bounce right hard (+2)
+    if vx == 0 then vx := 1     # If straight down, give a slight right nudge
+    
+    # Redraw marble at bounced position
+    i := spr_player
+    sprite px py 8
+    
+    jump game_loop
+
+# =====================
+# SPRITES (8x8)
+# =====================
+: spr_x
+    0x81 0x42 0x24 0x18 0x18 0x24 0x42 0x81
+
+: spr_player
+    0x00 0x18 0x3C 0x7E 0x7E 0x3C 0x18 0x00
+
+: spr_bumper
+    0x00
+    0x18
+    0x24
+    0x5A
+    0x5A
+    0x24
+    0x18
+    0x00
+
+: spr_solid
+    0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF
+
+# =====================
+# ROOM DATA
+# =====================
+
+: bumpers_r1  0xFF
+: bumpers_r2  0xFF
+: bumpers_r3  0xFF
+: bumpers_r4  20 10  20 26  16 18  28 18  40 18  38 10  38 26  0xFF
+: bumpers_r5  10 8   25 22  0xFF 
+: bumpers_r6  0xFF
+: bumpers_r7  24 8   20 14  16 16  16 18  16 20  20 24  24 28  32 8  28 14  32 28  0xFF
+: bumpers_r8  10 8   30 16  25 24  0xFF
+: bumpers_r9  17 10  17 22  38 26  0xFF
+
+: bumper_pointers
+    bumpers_r1 bumpers_r2 bumpers_r3 bumpers_r4 bumpers_r5 
+    bumpers_r6 bumpers_r7 bumpers_r8 bumpers_r9
